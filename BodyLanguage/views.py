@@ -1,9 +1,9 @@
-from django.shortcuts import render, redirect
+from django.contrib import messages
+from django.shortcuts import redirect, render
 
 # Create your views here.
 from BodyLanguage.forms import UserRegistrationForm
 from BodyLanguage.models import *
-from django.contrib import messages
 
 
 def index(request):
@@ -53,11 +53,11 @@ def quizzes(request):
             points = 0
             category = request.POST.get("category", "")
             for q in questions:
-                # ako selektiraniot value e ist so q.ans (ima samo eden selektiran)
+                # the user gets +1 point for correct answer
                 if q.ans == request.POST.get(q.question):
                     points += 1
 
-            #  ako vekje e reshen testot izbrishi gi poenite, pa stavi gi novite
+            #  reinsert points if present
             if Results.objects.filter(user=request.user).filter(category=category).count():
                 Results.objects.filter(user=request.user).filter(category=category).all().delete()
 
@@ -73,8 +73,7 @@ def quizzes(request):
             contexts = Question.objects.filter(category="contexts").all()
             behaviours = Question.objects.filter(category="behaviours").all()
 
-            context = {"random": random, "body_parts": body_parts, "emotions": emotions, "contexts": contexts,
-                       "behaviours": behaviours}
+            context = {"random": random, "body_parts": body_parts, "emotions": emotions, "contexts": contexts, "behaviours": behaviours}
             return render(request, 'quizzes.html', context=context)
 
     else:
@@ -101,48 +100,41 @@ def progress(request):
 
 
         # sum of points for each test
-        sumR = hasObjects(Results.objects.filter(user=request.user).filter(category="random").count(), random)
-        sumBP = hasObjects(Results.objects.filter(user=request.user).filter(category="body_parts").count(), body_parts)
-        sumE = hasObjects(Results.objects.filter(user=request.user).filter(category="emotions").count(), emotions)
-        sumC = hasObjects(Results.objects.filter(user=request.user).filter(category="contexts").count(), contexts)
-        sumB = hasObjects(Results.objects.filter(user=request.user).filter(category="behaviours").count(), behaviours)
+        sumR = sumPoints(Results.objects.filter(user=request.user).filter(category="random").count(), random)
+        sumBP = sumPoints(Results.objects.filter(user=request.user).filter(category="body_parts").count(), body_parts)
+        sumE = sumPoints(Results.objects.filter(user=request.user).filter(category="emotions").count(), emotions)
+        sumC = sumPoints(Results.objects.filter(user=request.user).filter(category="contexts").count(), contexts)
+        sumB = sumPoints(Results.objects.filter(user=request.user).filter(category="behaviours").count(), behaviours)
 
         # calculating overal score
-        score = (sumBP + sumE + sumC + sumB) * 100 / (body_partsCount + emotionsCount + contextsCount + behavioursCount) + percentage(sumR, randomCount)/10
+        score = (sumBP + sumE + sumC + sumB) * 100 / (body_partsCount + emotionsCount + contextsCount + behavioursCount) + calculatePercentage(sumR, randomCount)/10
 
         context = {
             "score": score,
-            "random": percentage(sumR, randomCount),
-            "body_parts": percentage(sumBP, body_partsCount),
-            "emotions": percentage(sumE, emotionsCount),
-            "context": percentage(sumC, contextsCount),
-            "behaviours": percentage(sumB, behavioursCount),
+            "random": calculatePercentage(sumR, randomCount),
+            "body_parts": calculatePercentage(sumBP, body_partsCount),
+            "emotions": calculatePercentage(sumE, emotionsCount),
+            "context": calculatePercentage(sumC, contextsCount),
+            "behaviours": calculatePercentage(sumB, behavioursCount),
         }
         return render(request, 'progress.html', context=context)
     else:
         return redirect("/login/")
 
 
-#     function for calculating percentages
-def percentage(userPoints, allPoints):
+def calculatePercentage(userPoints, allPoints):
     if type(userPoints) == int:
         return (userPoints / allPoints) * 100
     else:
         return 0
 
 
-# tuka gi presmetuvame poenite koga sme sigurni deka ima objekti
-def sumPoints(points):
-    sum = 0
-    for point in points:
-        sum += point.points
-    return sum
-
-
-# proveruvame dali ima objekti, ako da - povikuvame sumPoints, ako ne - vrakjame 0
-def hasObjects(brObjekti, poeni):
-    if brObjekti > 0:
-        return sumPoints(poeni)
+def sumPoints(numberOfObjects, points):
+    if numberOfObjects > 0:
+        sum = 0
+        for point in points:
+            sum += point.points
+        return sum
     else:
         return 0
 
@@ -166,11 +158,9 @@ def emotions(request):
     anger = Gesture.objects.filter(meaning__meaning="anger").all()
     fear = Gesture.objects.filter(meaning__meaning="fear").all()
 
-    context = {"happiness": happiness, "sadness": sadness, "shame": shame, "guilt": guilt, "disgust": disgust,
-               "anger": anger, "fear": fear}
+    context = {"happiness": happiness, "sadness": sadness, "shame": shame, "guilt": guilt, "disgust": disgust, "anger": anger, "fear": fear}
     return render(request, "emotions.html", context=context)
 
 
 def context(request):
     return render(request, "context.html")
-
